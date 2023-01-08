@@ -67,7 +67,7 @@ class TypeLengthBufferReceiver : public Buffer
     size_t length;
     std::vector<char> data;
     int state = 0;
-    bool isReceiver = true;
+    size_t received_data = 0;
 public:
 
     std::pair<char *, int> contiguous() override
@@ -76,14 +76,14 @@ public:
         {
             return {&type, 1};
         }
-        else if (state >= 1 && state <= 4)
+        else if (state >= 1 && state <= sizeof(size_t))
         {
             auto sent_length = (state-1);
             return {((char *)&length) + sent_length , sizeof(size_t) - sent_length };
         }
         else
         {
-            return {&data[data.size()], data.capacity() - data.size()};
+            return {data.data() + received_data, data.size() - received_data};
         }
     }
 
@@ -92,13 +92,16 @@ public:
         if (state == 0)
         {
             state = 1;
-        }else if (state >= 1 && state <= 4){
+        }else if (state >= 1 && state <= sizeof(size_t)+1){
             state += n;
+            if(state == sizeof(size_t)+1){
+                data.assign(network_to_host64(length), 0);
+                state ++;
+            }
         }
         else
         {
-            data.reserve(network_to_host64(length));
-            state = 2;
+            received_data += n;
         }
     }
 

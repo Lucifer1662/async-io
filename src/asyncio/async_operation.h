@@ -5,6 +5,17 @@
 
 using Buffer_Ptr = std::unique_ptr<Buffer>;
 
+template <typename T, typename S>
+std::unique_ptr<T> dynamic_pointer_cast(std::unique_ptr<S> &&p) noexcept
+{
+    auto converted = std::unique_ptr<T>{dynamic_cast<T *>(p.get())};
+    if (converted)
+    {
+        p.release(); // no longer owns the pointer
+    }
+    return converted;
+}
+
 template <typename BaseOp>
 class AsyncOperation
 {
@@ -36,10 +47,9 @@ public:
         return !operation_requests.empty();
     }
 
-
-    //call back is void(Buffer_Ptr, bool) type
-    template <typename Func1>
-    void request(Buffer_Ptr b, Func1 &&callback)
+    // call back is void(Buffer_Ptr, bool) type
+    template <typename Buffer_T, typename Func>
+    void request(std::unique_ptr<Buffer_T> b, Func &&callback)
     {
         // if not already subscribe in context to type of request
         // alternatively if a no op occurs unsubscribe
@@ -58,7 +68,12 @@ public:
             }
         }
 
-        operation_requests.emplace(std::forward<Func1>(callback), std::move(b));
+        operation_requests.emplace(
+            [callback = std::forward<Func>(callback)](Buffer_Ptr buffer, bool error)
+            {
+                callback(dynamic_pointer_cast<Buffer_T>(std::move(buffer)), error);
+            },
+            std::move(b));
     }
 
     bool check_requests()
@@ -66,12 +81,12 @@ public:
         while (!operation_requests.empty())
         {
             auto &front = operation_requests.front();
-            if (operation(*front.buffer))
+            auto overwrote = operation(*front.buffer) if (overwrote == 0)
             {
                 front.callback(std::move(front.buffer), false);
                 operation_requests.pop();
             }
-            else
+            else if (overwrote == -1)
             {
                 break;
             }
@@ -87,17 +102,44 @@ public:
     }
 
 private:
-    bool operation(Buffer &b)
+    // int operation(Buffer &b)
+    // {
+    //     for (;;)
+    //     {
+    //         auto [data, size] = b.contiguous();
+    //         if (size == 0)
+    //             return 0;
+    //         int num_written = base_operation(data, size);
+    //         int num_used = b.advance(num_written);
+    //         if (num_written != size)
+    //         {
+    //             return -1;
+    //         }
+    //         else
+    //         {
+    //             return num_used;
+    //         }
+    //     }
+    // }
+
+    template<typename Func>
+    int operation(Buffer &b, Func&& func)
     {
         for (;;)
         {
             auto [data, size] = b.contiguous();
             if (size == 0)
-                return true;
-            int num_written = base_operation(data, size);
-            b.advance(num_written);
+                return 0;
+            int num_written = func(data, size);
+            int num_used = b.advance(num_written);
             if (num_written != size)
-                return false;
+            {
+                return -1;
+            }
+            else
+            {
+                return num_used;
+            }
         }
     }
 };
