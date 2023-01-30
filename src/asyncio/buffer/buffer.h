@@ -1,5 +1,6 @@
 #pragma once
 #include <utility>
+#include <memory>
 
 struct Buffer
 {
@@ -8,7 +9,10 @@ struct Buffer
     {
         return {0, 0};
     }
-    virtual void advance(int n) {}
+    virtual int advance(int n) {return 0;}
 
     virtual ~Buffer() {}
 };
+
+using Buffer_Ptr = std::unique_ptr<Buffer>;
+

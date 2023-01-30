@@ -5,8 +5,7 @@ cmake_minimum_required(VERSION 3.14)
 
 project ("asyncio")
 
-
-
+add_definitions( -DNOMINMAX )
 
 include(FetchContent)
 FetchContent_Declare(
@@ -21,6 +20,8 @@ FetchContent_MakeAvailable(googletest)
 
 # add_compile_options(-fsanitize=address)
 # add_link_options(-fsanitize=address)
+
+SET(CMAKE_CXX_FLAGS  "/await:strict")
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

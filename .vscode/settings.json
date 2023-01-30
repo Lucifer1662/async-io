@@ -89,6 +89,9 @@
         "xlocmon": "cpp",
         "xloctime": "cpp",
         "xtree": "cpp",
-        "queue": "cpp"
+        "queue": "cpp",
+        "coroutine": "cpp",
+        "future": "cpp",
+        "shared_mutex": "cpp"
     }
 }

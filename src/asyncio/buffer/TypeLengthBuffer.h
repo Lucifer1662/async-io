@@ -40,7 +40,7 @@ class TypeLengthBuffer : public Buffer
         }
     }
 
-    void advance(int n) override
+    int advance(int n) override
     {
         if (state == 0)
         {
@@ -58,6 +58,7 @@ class TypeLengthBuffer : public Buffer
             }
             state = 2;
         }
+        return 0;
     }
 };
 
@@ -87,7 +88,7 @@ public:
         }
     }
 
-    void advance(int n) override
+    int advance(int n) override
     {
         if (state == 0)
         {
@@ -103,6 +104,7 @@ public:
         {
             received_data += n;
         }
+        return 0;
     }
 
     char get_type() { return type; }
@@ -140,7 +142,7 @@ public:
         }
     }
 
-    void advance(int n) override
+    int advance(int n) override
     {
         if (state == 0)
         {
@@ -153,6 +155,7 @@ public:
             sender_pos += n;
             state = 2;
         }
+        return 0;
     }
 
     size_t payload_sent_so_far(){
