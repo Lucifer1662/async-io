@@ -8,7 +8,7 @@ AsyncTask<int> async_buffer_operation(Buffer &b, AsyncOperation &async_operation
     for (;;) {
         auto [data, size] = b.contiguous();
         if (size == 0) {
-            return total_consumed;
+            co_return total_consumed;
         }
 
         int num_written = async_operation.poll_op(data, size);

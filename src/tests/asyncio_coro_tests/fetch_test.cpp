@@ -17,7 +17,7 @@ static AsyncTask<> fetch_test(SocketContext &socketContext) {
     std::cout << response.body << std::endl;
 }
 
-TEST(Fetch_Coro_Test, Fetch) {
+TEST(Fetch_Coroutine_Test, Fetch) {
     TimerContext context;
     SocketContext socketContext;
 
@@ -25,19 +25,6 @@ TEST(Fetch_Coro_Test, Fetch) {
 
     fetch_test(socketContext);
 
-    context.step();
-    context.step();
-    context.step();
-    context.step();
-    context.step();
-    context.step();
-    context.step();
-    context.step();
-    context.step();
-    context.step();
-    context.step();
-    context.step();
-    context.step();
     context.step();
     context.step();
     context.step();

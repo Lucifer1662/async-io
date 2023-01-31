@@ -1,5 +1,6 @@
 #include "timer_context.h"
-#include <winsock2.h>
+#include <climits>
+#include "os_socket.h"
 
 void TimerContext::check_timers() {
     auto end_time_ms = current_time_ms();
@@ -34,7 +35,7 @@ long long TimerContext::step() {
     current_interval_ms = std::max(0ll, current_interval_ms);
 
     // poll events
-    Sleep(current_interval_ms);
+    OS::sleep(current_interval_ms);
 
     check_timers();
 
@@ -64,4 +65,23 @@ long long TimerContext::correct_poll_time(long long current_time) {
     }
 
     return start_time + step_count * interval.count();
+}
+
+auto async_wait_until_ms(long long time_ms, TimerContext &timerContext) {
+    struct Awaitable {
+        long long time_ms;
+        TimerContext &timerContext;
+
+        constexpr bool await_ready() const noexcept { return true; }
+        void await_resume() const noexcept {}
+        void await_suspend(coroutine_handle<AsyncTask<>::promise_type> h) {
+            timerContext.add_timer(time_ms, [h]() { h.resume(); });
+        }
+    };
+
+    return Awaitable{time_ms, timerContext};
+}
+
+AsyncTask<> async_wait_for_ms(long long ms, TimerContext &timerContext) {
+    co_await async_wait_until_ms(wait_for_milliseconds(ms), timerContext);
 }

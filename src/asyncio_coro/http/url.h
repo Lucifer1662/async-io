@@ -10,7 +10,8 @@ struct Protocol {
     ProtocolEnum mProtocol;
 
   public:
-    Protocol(ProtocolEnum protocol) : mProtocol(protocol) {}
+    Protocol(ProtocolEnum protocol)
+        : mProtocol(protocol) {}
     Protocol() = default;
     Protocol(const Protocol &) = default;
     Protocol(Protocol &&) = default;
@@ -26,6 +27,7 @@ struct Protocol {
         case HTTPS:
             return "HTTPS";
         }
+        return "";
     }
 };
 
@@ -56,7 +58,8 @@ class Method {
     MethodEnum method;
 
   public:
-    Method(MethodEnum method) : method(method) {}
+    Method(MethodEnum method)
+        : method(method) {}
 
     bool operator==(const Method &m) { return m.method == method; }
     bool operator!=(const Method &m) { return m.method != method; }
@@ -74,6 +77,7 @@ class Method {
         case OPTIONS:
             return "OPTIONS";
         }
+        return "";
     }
 };
 
@@ -81,7 +85,9 @@ struct HttpVersion {
     const size_t major;
     const size_t minor;
 
-    HttpVersion(size_t major, size_t minor) : major(major), minor(minor) {}
+    HttpVersion(size_t major, size_t minor)
+        : major(major)
+        , minor(minor) {}
 
     std::string to_string() const { return std::to_string(major) + "." + std::to_string(minor); }
 };
@@ -93,7 +99,10 @@ struct RequestLine {
     HttpVersion version;
 
     RequestLine(Method method, std::string request_uri, Protocol protocol, HttpVersion version)
-        : method(method), request_uri(request_uri), protocol(protocol), version(version) {}
+        : method(method)
+        , request_uri(request_uri)
+        , protocol(protocol)
+        , version(version) {}
 
     RequestLine() = default;
     RequestLine(const RequestLine &) = default;

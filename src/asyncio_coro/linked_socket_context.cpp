@@ -5,5 +5,5 @@
 
 void link_socket_to_timer_context(TimerContext &timerContext, SocketContext &socketContext,
                                   std::chrono::milliseconds interval) {
-    make_interval_at(timerContext, interval.count(), current_time_ms(), [&]() { socketContext.step(); });
+    make_interval_at(timerContext, interval.count(), current_time_ms(), [&]() { socketContext.poll(); });
 }

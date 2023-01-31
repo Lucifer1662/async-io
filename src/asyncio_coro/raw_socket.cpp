@@ -1,18 +1,15 @@
 #include "raw_socket.h"
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#include <mstcpip.h>
+#include "os_socket.h"
 
 std::optional<RawSocket> RawSocket::create() {
-    SOCKET fd;
-    if (INVALID_SOCKET == (fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP))) {
-        CLOSESOCK(fd);
+    OS::SOCKET fd;
+    if (OS::INVALID_SOCKET == (fd = OS::create_tcp_socket())) {
+        OS::CLOSESOCK(fd);
         return {};
     }
 
-    ULONG uNonBlockingMode = 1;
-    if (SOCKET_ERROR == ioctlsocket(fd, FIONBIO, &uNonBlockingMode)) {
-        CLOSESOCK(fd);
+    if (!OS::non_blocking_socket(fd)) {
+        OS::CLOSESOCK(fd);
         return {};
     }
 
@@ -23,51 +20,55 @@ void RawSocket::read_available() { read_operation.available(); }
 
 void RawSocket::write_available() { write_operation.available(); }
 
+#include <iostream>
+
 AsyncTask<> RawSocket::connect(const IPAddress &address) {
-    auto ip_string = address.ip_to_string();
+    bool failed = OS::connect(fd, address.ip_to_string().c_str(), address.port);
 
-    sockaddr_in windows_address;
-    windows_address.sin_family = AF_INET;
-    windows_address.sin_addr.s_addr = inet_addr(ip_string.c_str());
-    windows_address.sin_port = htons(address.port);
-
-    auto res = ::connect(fd, (SOCKADDR *)&windows_address, sizeof(windows_address));
-    if (res == SOCKET_ERROR) {
-        if (WSAGetLastError() == WSAECONNREFUSED) {
-            printf("Connection refused\n");
-        }
-    }
+    int w;
+    std::cout << (failed ? "is fine" : "is bad");
 
     co_await write_operation.wait();
 
     co_return;
 }
 
-bool RawSocket::start_listening(int port) {
-
-    SOCKADDR_STORAGE addr = {0};
-    addr.ss_family = AF_INET;
-    INETADDR_SETANY((SOCKADDR *)&addr);
-    SS_PORT((SOCKADDR *)&addr) = htons(port);
-
-    auto err = bind(fd, (SOCKADDR *)&addr, sizeof(addr));
-    if (SOCKET_ERROR == err) {
-        printf("Failed to bind %d\n", err);
-        return false;
-    }
-
-    if (SOCKET_ERROR == listen(fd, 1)) {
-        return false;
-    }
+void RawSocket::destroy_dependent_coroutines() {
+    read_operation.destroy_corourtine();
+    write_operation.destroy_corourtine();
 }
 
-AsyncTask<std::optional<RawSocket>> RawSocket::accept() {
-    SOCKET fd_new_connection;
+bool RawListeningSocket::start_listening(int port) {
+    this->port = port;
+    return OS::listen(fd, port);
+}
+
+AsyncTask<std::optional<RawSocket>> RawListeningSocket::accept() {
+    OS::SOCKET fd_new_connection;
     do {
-        co_await read_operation.wait();
-        fd_new_connection = ::accept(fd, NULL, NULL);
+        fd_new_connection = co_await accept_operation(port);
+        OS::non_blocking_socket(fd_new_connection);
         co_yield RawSocket(fd_new_connection);
-    } while (fd_new_connection != INVALID_SOCKET);
+    } while (fd_new_connection != OS::INVALID_SOCKET);
 
     co_return {};
 }
+
+std::optional<RawListeningSocket> RawListeningSocket::create() {
+    OS::SOCKET fd;
+    if (OS::INVALID_SOCKET == (fd = OS::create_tcp_socket())) {
+        OS::CLOSESOCK(fd);
+        return {};
+    }
+
+    if (!OS::non_blocking_socket(fd)) {
+        OS::CLOSESOCK(fd);
+        return {};
+    }
+
+    return RawListeningSocket(fd);
+}
+
+void RawListeningSocket::accept_available() { accept_operation.available(); }
+
+void RawListeningSocket::destroy_dependent_coroutines() { accept_operation.destroy_corourtine(); }

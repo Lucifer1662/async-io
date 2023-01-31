@@ -3,7 +3,6 @@
 #include "socket_context_handler.h"
 #include <optional>
 #include <memory>
-#include "listening_socket.h"
 
 class SocketContext;
 
@@ -19,21 +18,16 @@ class Socket : public RawSocket, SocketContextHandler {
 
     static std::optional<std::unique_ptr<Socket>> create_ptr(SocketContext &context);
 
-    void on_read(SocketContext &context, int i) override { read_available(); }
-
-    void on_write(SocketContext &context, int i) override { write_available(); }
-
-    AsyncTask<std::unique_ptr<Socket>> accept() {
-        std::optional<Socket> new_socket;
-        for (;;) {
-            auto new_socket_opt = co_await RawSocket::accept();
-            if (new_socket_opt.has_value()) {
-                co_yield std::make_unique<Socket>(context, *new_socket_opt);
-            } else {
-                co_return {};
-            }
-        };
+    void on_event(Flag f, SocketContext &context) override {
+        if (f.isRead()) {
+            read_available();
+        }
+        if (f.isWrite()) {
+            write_available();
+        }
     }
 
     ~Socket();
+
+    void on_removed() override { destroy_dependent_coroutines(); }
 };

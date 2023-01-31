@@ -1,4 +1,5 @@
 #include "IpAddress.h"
+#include "os_socket.h"
 
 static bool get_num(const char *&s, int &num) {
     auto ss = s;
@@ -61,9 +62,7 @@ std::string IPAddress::ip_to_string() const {
     return str;
 }
 
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#include <stdio.h>
+#ifdef WIN32
 
 std::vector<IPAddress> IPAddress_from_URL(const char *host_name, const char *service_name) {
     INT iRetval;
@@ -146,3 +145,21 @@ std::vector<IPAddress> IPAddress_from_URL(const char *host_name, const char *ser
 
     freeaddrinfo(result);
 }
+
+#else
+#include <stdio.h>
+#include <netdb.h>
+#include <arpa/inet.h>
+std::vector<IPAddress> IPAddress_from_URL(const char *host_name, const char *service_name) {
+    struct hostent *he = gethostbyname("www.stackoverflow.com");
+    std::vector<IPAddress> addresses;
+    for (size_t i = 0; i < he->h_length; i++) {
+        char *ip = inet_ntoa(*(struct in_addr *)he->h_addr_list[i]);
+
+        addresses.push_back(IPAddress(
+            true, {(unsigned char)ip[0], (unsigned char)ip[1], (unsigned char)ip[2], (unsigned char)ip[3]}, 80, false));
+    }
+    return addresses;
+}
+
+#endif

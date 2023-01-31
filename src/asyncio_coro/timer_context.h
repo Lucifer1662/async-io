@@ -55,21 +55,4 @@ class TimerContext {
     long long correct_poll_time(long long current_time);
 };
 
-auto async_wait_until_ms(long long time_ms, TimerContext &timerContext) {
-    struct Awaitable {
-        long long time_ms;
-        TimerContext &timerContext;
-
-        constexpr bool await_ready() const noexcept { return false; }
-        void await_resume() const noexcept {}
-        void await_suspend(coroutine_handle<AsyncTask<>::promise_type> h) {
-            timerContext.add_timer(time_ms, [h]() { h.resume(); });
-        }
-    };
-
-    return Awaitable{time_ms, timerContext};
-}
-
-auto async_wait_for_ms(long long ms, TimerContext &timerContext) {
-    return async_wait_until_ms(wait_for_milliseconds(ms), timerContext);
-}
+AsyncTask<> async_wait_for_ms(long long ms, TimerContext &timerContext);
