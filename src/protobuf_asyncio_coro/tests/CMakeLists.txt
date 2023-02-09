@@ -25,7 +25,7 @@ else()
 set(CUSTOM_LIBS "-lssl -lcrypto")
 endif()
 
-target_link_libraries(protobuf_asyncio_coro_tests PUBLIC GTest::gtest_main asyncio_coro ${CUSTOM_LIBS} 
+target_link_libraries(protobuf_asyncio_coro_tests PUBLIC GTest::gtest_main asyncio_coro protobuf_asyncio_coro ${CUSTOM_LIBS} 
 ${PROTOBUF_LIBRARY}
 )
 

@@ -30,11 +30,11 @@ AsyncTask<int> async_buffer_operation(Buffer &b, AsyncOperation &async_operation
     }
 }
 
-template <typename AsyncOperation> AsyncTask<std::string> vsread_async_c_string(AsyncOperation &read_operation) {
+template <typename AsyncOperation> AsyncTask<std::string> read_async_c_string(AsyncOperation &read_operation) {
     std::string str;
     char c;
     for (;;) {
-        int num_read = read_operation(&c, 1);
+        int num_read = read_operation.poll_op(&c, 1);
 
         if (num_read == 1) {
             if (c == 0) {

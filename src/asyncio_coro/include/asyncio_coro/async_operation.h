@@ -1,7 +1,9 @@
 #pragma once
 #include "async_task.h"
 #include "os_socket.h"
+#include <iostream>
 #include <cstring>
+#include <errno.h>
 
 struct SocketContext;
 namespace AsyncOperation {
@@ -14,6 +16,8 @@ template <typename AsyncOperation> AsyncTask<> async_stream(char *data, int n, A
     while (n != 0) {
         auto num = operation.poll_op(data, n);
         if (num == -1) {
+            std::cout << strerror(errno) << std::endl;
+            std::cout << errno << std::endl;
             num = 0;
         }
         n -= num;

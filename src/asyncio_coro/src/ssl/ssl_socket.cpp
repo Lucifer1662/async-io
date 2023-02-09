@@ -1,8 +1,8 @@
-#include "ssl_socket.h"
-#include "../IpAddress.h"
+#include "asyncio_coro/ssl/ssl_socket.h"
+#include "asyncio_coro/IpAddress.h"
 #include <openssl/ssl.h>
 
-#include "ssl_context.h"
+#include "asyncio_coro/ssl/ssl_context.h"
 
 SSL_Socket::SSL_Socket(SocketContext &context, SSLContext &sslContext, OS::SOCKET socket, SSL *ssl)
     : context(context)
