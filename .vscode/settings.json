@@ -1,4 +1,7 @@
 {
+    "docker.environment": {
+        "DOCKER_HOST": "ssh://Hawkins_Luke@192.168.0.67"
+    },
     "files.associations": {
         "array": "cpp",
         "bit": "cpp",
