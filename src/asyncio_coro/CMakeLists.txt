@@ -12,7 +12,7 @@ add_library(asyncio_coro ${SRC})
 if(MSVC)
 set(CUSTOM_LIBS "-lwsock32 -lws2_32")
 else()
-set(CUSTOM_LIBS "")
+set(CUSTOM_LIBS "-lssl -lcrypto")
 endif()
 
 target_link_libraries(asyncio_coro ${CUSTOM_LIBS} )

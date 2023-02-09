@@ -110,7 +110,7 @@ bool listen(SOCKET server_fd, int port) {
 
 SOCKET accept(SOCKET fd, int port) {
     sockaddr address;
-    socklen_t addrlen;
+    socklen_t addrlen = {0};
     return accept(fd, &address, &addrlen);
 }
 

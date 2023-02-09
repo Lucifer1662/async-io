@@ -3,6 +3,8 @@
 #include <unordered_map>
 #include <stdint.h>
 
+namespace Http {
+
 struct Protocol {
     enum ProtocolEnum { HTTP, HTTPS };
 
@@ -23,9 +25,19 @@ struct Protocol {
     std::string to_string() const {
         switch (mProtocol) {
         case HTTP:
+            return "http";
+        case HTTPS:
+            return "https";
+        }
+        return "";
+    }
+
+    std::string to_request_line_string() const {
+        switch (mProtocol) {
+        case HTTP:
             return "HTTP";
         case HTTPS:
-            return "HTTPS";
+            return "HTTP";
         }
         return "";
     }
@@ -82,14 +94,16 @@ class Method {
 };
 
 struct HttpVersion {
-    const size_t major;
-    const size_t minor;
+    size_t major;
+    size_t minor;
 
     HttpVersion(size_t major, size_t minor)
         : major(major)
         , minor(minor) {}
 
-    std::string to_string() const { return std::to_string(major) + "." + std::to_string(minor); }
+    std::string to_string() const {
+        return minor == 0 ? std::to_string(major) : std::to_string(major) + "." + std::to_string(minor);
+    }
 };
 
 struct RequestLine {
@@ -110,6 +124,9 @@ struct RequestLine {
     RequestLine &operator=(const RequestLine &) = default;
 
     std::string to_string() const {
-        return method.to_string() + " " + request_uri + " " + protocol.to_string() + "/" + version.to_string() + "\r\n";
+        return method.to_string() + " " + request_uri + " " + protocol.to_request_line_string() + "/" +
+            version.to_string() + "\r\n";
     }
 };
+
+}   // namespace Http

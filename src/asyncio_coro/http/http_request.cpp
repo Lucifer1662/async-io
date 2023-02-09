@@ -1,5 +1,7 @@
 #include "http_request.h"
 
+namespace Http {
+
 std::string_view trim_white_space(std::string_view str) {
     while (!str.empty() && std::isspace(str.front())) {
         str = str.substr(1);
@@ -75,3 +77,18 @@ bool ends_with_two_new_lines(const std::string &str) {
 
     return true;
 }
+
+bool ends_with_single_new_lines(const std::string &str) {
+    if (str.size() < 2)
+        return 0;
+    auto it = str.rbegin();
+    if ('\n' != *it)
+        return false;
+    it = std::next(it);
+    if ('\r' != *it)
+        return false;
+
+    return true;
+}
+
+}   // namespace Http

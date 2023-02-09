@@ -1,28 +1,24 @@
 #pragma once
 #include <optional>
 #include "socket.h"
-#include "raw_socket.h"
+#include "os_socket.h"
+#include "async_operation.h"
 #include "socket_context_handler.h"
 #include "async_task.h"
 #include <memory>
 
 class SocketContext;
 
-class ListeningSocket : public RawListeningSocket, SocketContextHandler {
+class ListeningSocket {
     SocketContext &context;
+    OS::SOCKET socket;
+    int port;
+    AcceptAsyncOperation accept_operation;
 
   public:
-    ListeningSocket(SocketContext &context, RawListeningSocket socket);
-    ListeningSocket(const ListeningSocket &) = delete;
-    ListeningSocket(ListeningSocket &&) = delete;
+    ListeningSocket(SocketContext &context, OS::SOCKET socket);
     static std::optional<ListeningSocket> create(SocketContext &context);
 
-    static std::optional<std::unique_ptr<ListeningSocket>> create_ptr(SocketContext &context);
-
-    void on_event(Flag f, SocketContext &context) override { accept_available(); }
-    void on_removed() override { destroy_dependent_coroutines(); }
-
-    AsyncTask<std::unique_ptr<Socket>> accept();
-
-    ~ListeningSocket();
+    bool start_listening(int port);
+    AsyncTask<Socket> accept();
 };

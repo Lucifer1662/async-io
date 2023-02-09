@@ -1,42 +1,34 @@
 #include "listening_socket.h"
 #include "socket_context.h"
 
-ListeningSocket::ListeningSocket(SocketContext &context, RawListeningSocket socket)
+ListeningSocket::ListeningSocket(SocketContext &context, OS::SOCKET socket)
     : context(context)
-    , RawListeningSocket(std::move(socket)) {
-    printf("Create: %d\n", FD());
-
-    context.add_socket(FD(), this);
-}
+    , socket(socket)
+    , accept_operation(socket, context) {}
 
 std::optional<ListeningSocket> ListeningSocket::create(SocketContext &context) {
-    auto socket = RawListeningSocket::create();
-    if (!socket) {
+    OS::SOCKET fd;
+    if (OS::INVALID_SOCKET == (fd = OS::create_tcp_socket())) {
+        OS::CLOSESOCK(fd);
         return {};
     }
-    return std::make_optional<ListeningSocket>(context, std::move(*socket));
-}
 
-std::optional<std::unique_ptr<ListeningSocket>> ListeningSocket::create_ptr(SocketContext &context) {
-    auto socket = RawListeningSocket::create();
-    if (!socket) {
+    if (!OS::non_blocking_socket(fd)) {
+        OS::CLOSESOCK(fd);
         return {};
     }
-    return std::make_unique<ListeningSocket>(context, std::move(*socket));
+
+    return ListeningSocket(context, fd);
 }
 
-AsyncTask<std::unique_ptr<Socket>> ListeningSocket::accept() {
-    for (;;) {
-        auto new_socket_opt = co_await RawListeningSocket::accept();
-        if (new_socket_opt.has_value()) {
-            co_yield std::make_unique<Socket>(context, std::move(*new_socket_opt));
-        } else {
-            co_return {};
-        }
-    }
+AsyncTask<Socket> ListeningSocket::accept() {
+    OS::SOCKET fd_new_connection;
+    fd_new_connection = co_await accept_operation(port);
+    OS::non_blocking_socket(fd_new_connection);
+    co_return Socket(context, fd_new_connection);
 }
 
-ListeningSocket::~ListeningSocket() {
-    printf("Destroyed: %d\n", FD());
-    context.remove_socket(FD());
+bool ListeningSocket::start_listening(int port) {
+    this->port = port;
+    return OS::listen(socket, port);
 }

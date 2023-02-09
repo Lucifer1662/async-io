@@ -8,5 +8,6 @@ add_subdirectory("hello_server")
 endif()
 
 add_subdirectory("asyncio_coro")
+add_subdirectory("protobuf_asyncio_coro")
 enable_testing()
 

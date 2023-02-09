@@ -2,6 +2,24 @@
 #include <iostream>
 #include "os_socket.h"
 
+struct SocketContext::Awaitable {
+    coroutine_handle<> handle;
+    bool failed = false;
+
+    bool await_ready() const noexcept { return false; }
+    void await_resume() const noexcept {}
+    void await_suspend(coroutine_handle<> h) noexcept { handle = h; }
+
+    void resume() { handle.resume(); }
+
+    void on_removed() {
+        if (handle && !handle.done()) {
+            failed = true;
+            handle.resume();
+        }
+    }
+};
+
 #if WIN32
 
 bool SocketContext::add_socket(OS::SOCKET fd, SocketContextHandler *callback) {
@@ -130,21 +148,6 @@ SocketContext::SocketContext(size_t max_events) {
 
 bool SocketContext::is_good() { return epollfd == OS::INVALID_SOCKET; }
 
-bool SocketContext::add_socket(OS::SOCKET fd, SocketContextHandler *callback) {
-    epoll_event ev;
-    ev.events = EPOLLIN | EPOLLOUT;
-    ev.data.ptr = callback;
-    sockets[fd] = callback;
-    return epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &ev) == -1;
-}
-
-bool SocketContext::remove_socket(OS::SOCKET fd) {
-    epoll_event ev;
-    ev.data.fd = fd;
-    sockets.erase(fd);
-    return epoll_ctl(epollfd, EPOLL_CTL_DEL, fd, &ev) == -1;
-}
-
 #include "errno.h"
 
 bool SocketContext::poll() {
@@ -161,45 +164,116 @@ bool SocketContext::poll() {
 
     for (size_t i = 0; i < nfds; i++) {
         auto event = events[i];
-        auto handler = (SocketContextHandler *)events[i].data.ptr;
-        handler->on_event(events[i].events, *this);
+        auto handlers = (Handlers *)events[i].data.ptr;
+        Flag flag(events[i].events);
+        // if (handlers->read) {
+        //     auto callback = handlers->read;
+        //     handlers->read = nullptr;
+        //     callback->resume();
+        // }
+        // if (handlers->write) {
+        //     auto callback = handlers->write;
+        //     handlers->write = nullptr;
+        //     callback->resume();
+        // }
+
+        if (flag.isRead() && handlers->read) {
+            auto callback = handlers->read;
+            handlers->read = nullptr;
+            callback->resume();
+        }
+        if (flag.isWrite() && handlers->write) {
+            auto callback = handlers->write;
+            handlers->write = nullptr;
+            callback->resume();
+        }
+
+        if (!handlers->write && !handlers->read) {
+            remove_handlers(handlers->fd);
+        }
     }
 
     return true;
 }
 
+void SocketContext::remove_handlers(OS::SOCKET fd) {
+    sockets.erase(fd);
+    epoll_ctl(epollfd, EPOLL_CTL_DEL, fd, nullptr) == -1;
+}
+
 SocketContext::~SocketContext() {
-    for (auto [fd, handler] : sockets) {
-        handler->on_removed();
+    for (auto &[fd, handler] : sockets) {
+        if (handler->read)
+            handler->read->on_removed();
+        if (handler->write)
+            handler->write->on_removed();
     }
 }
 
-AsyncTask<bool> SocketContext::read(OS::SOCKET fd, char *data, int n) {
-    struct Awaitable : public SocketContextHandler {
-        coroutine_handle<> handle;
-        bool failed = false;
+bool SocketContext::subscribe_for_read(OS::SOCKET fd, SocketContext::Awaitable *callback) {
+    bool is_new;
+    auto &handler = get_handlers(fd, is_new);
+    handler.read = callback;
+    return update_subscription(fd, handler, is_new);
+}
+bool SocketContext::subscribe_for_write(OS::SOCKET fd, SocketContext::Awaitable *callback) {
+    bool is_new;
+    auto &handler = get_handlers(fd, is_new);
+    handler.write = callback;
+    return update_subscription(fd, handler, is_new);
+}
 
-        bool await_ready() const noexcept { return false; }
-        void await_resume() const noexcept {}
-        void await_suspend(coroutine_handle<> h) noexcept { handle = h; }
+SocketContext::Handlers &SocketContext::get_handlers(OS::SOCKET fd, bool &is_new) {
+    auto it = sockets.find(fd);
+    if (it != sockets.end()) {
+        is_new = false;
+        return *it->second;
+    } else {
+        is_new = true;
+        auto [new_it, success] = sockets.insert({fd, std::make_unique<SocketContext::Handlers>()});
+        new_it->second->fd = fd;
+        return *new_it->second;
+    }
+}
 
-        void on_event(Flag f, SocketContext &context) override { handle.resume(); };
+bool SocketContext::update_subscription(OS::SOCKET fd, SocketContext::Handlers &handlers, bool is_new) {
+    epoll_event ev;
+    ev.events = 0;
+    ev.data.ptr = &handlers;
+    int op = is_new ? EPOLL_CTL_ADD : EPOLL_CTL_MOD;
 
-        void on_removed() override {
-            if (handle && !handle.done()) {
-                failed = true;
-                handle.resume();
-            }
-        }
-    };
+    if (handlers.read) {
+        ev.events |= EPOLLIN;
+    }
 
-    auto awaitable = Awaitable();
+    if (handlers.write) {
+        ev.events |= EPOLLOUT;
+    }
 
-    add_socket(fd, &awaitable);
+    return epoll_ctl(epollfd, op, fd, &ev) == -1;
+}
+
+#endif
+
+AsyncTask<> SocketContext::wait_for_read(OS::SOCKET fd) {
+
+    auto awaitable = SocketContext::Awaitable();
+
+    subscribe_for_read(fd, &awaitable);
     co_await awaitable;
+
     if (awaitable.failed) {
         throw std::exception();
     }
 }
 
-#endif
+AsyncTask<> SocketContext::wait_for_write(OS::SOCKET fd) {
+    auto awaitable = SocketContext::Awaitable();
+
+    subscribe_for_write(fd, &awaitable);
+    co_await awaitable;
+
+    if (awaitable.failed) {
+        throw std::exception();
+    }
+}

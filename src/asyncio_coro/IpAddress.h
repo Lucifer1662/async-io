@@ -10,11 +10,7 @@ struct IPAddress {
     unsigned short port;
     bool is_loop_back;
 
-    IPAddress(bool is_ipv4, std::vector<unsigned char> address, int port, bool is_loop_back)
-        : is_ipv4(is_ipv4)
-        , address(std::move(address))
-        , port(port)
-        , is_loop_back(is_loop_back) {}
+    IPAddress(bool is_ipv4, std::vector<unsigned char> address, int port, bool is_loop_back);
 
     std::string ip_to_string() const;
     static std::optional<IPAddress> from_string(const std::string &ip, int port = -1);

@@ -1,65 +1,31 @@
 #include "socket.h"
-#include "socket_context.h"
+#include "IpAddress.h"
 
-Socket::Socket(SocketContext &context, RawSocket socket)
+Socket::Socket(SocketContext &context, OS::SOCKET socket)
     : context(context)
-    , RawSocket(std::move(socket)) {
-    printf("Create: %d\n", FD());
-
-    context.add_socket(FD(), this);
-}
+    , fd(socket)
+    , read_operation(fd, context)
+    , write_operation(fd, context) {}
 
 std::optional<Socket> Socket::create(SocketContext &context) {
-    auto socket = RawSocket::create();
-    if (!socket) {
+    OS::SOCKET fd;
+    if (OS::INVALID_SOCKET == (fd = OS::create_tcp_socket())) {
+        OS::CLOSESOCK(fd);
         return {};
     }
-    return std::make_optional<Socket>(context, std::move(*socket));
-}
 
-std::optional<std::unique_ptr<Socket>> Socket::create_ptr(SocketContext &context) {
-    auto socket = RawSocket::create();
-    if (!socket) {
+    if (!OS::non_blocking_socket(fd)) {
+        OS::CLOSESOCK(fd);
         return {};
     }
-    return std::make_unique<Socket>(context, std::move(*socket));
+
+    return std::make_optional<Socket>(context, fd);
 }
 
-AsyncTask<int> Socket::read(char *data, int n) {
-    struct Awaitable : public SocketContextHandler {
-        coroutine_handle<> handle;
-        bool failed = false;
+AsyncTask<> Socket::connect(const IPAddress &address) {
+    bool failed = OS::connect(fd, address.ip_to_string().c_str(), address.port);
 
-        bool await_ready() const noexcept { return false; }
-        void await_resume() const noexcept {}
-        void await_suspend(coroutine_handle<> h) noexcept { handle = h; }
+    co_await write_operation.wait();
 
-        void on_event(Flag f, SocketContext &context) override { handle.resume(); };
-
-        void on_removed() override {
-            if (handle && !handle.done()) {
-                failed = true;
-                handle.resume();
-            }
-        }
-    };
-
-    auto awaitable = Awaitable();
-
-    auto amount = OS::read(data, n);
-
-    if (amount > 0) {
-        co_return amount;
-    }
-
-    context.add_socket(fd, &awaitable);
-    co_await awaitable;
-    if (awaitable.failed) {
-        throw std::exception();
-    }
-}
-
-Socket::~Socket() {
-    printf("Destroyed: %d\n", FD());
-    context.remove_socket(FD());
+    co_return;
 }

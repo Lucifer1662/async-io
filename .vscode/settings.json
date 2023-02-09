@@ -92,6 +92,7 @@
         "queue": "cpp",
         "coroutine": "cpp",
         "future": "cpp",
-        "shared_mutex": "cpp"
+        "shared_mutex": "cpp",
+        "*.inc": "cpp"
     }
 }

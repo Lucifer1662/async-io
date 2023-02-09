@@ -1,10 +1,12 @@
 #pragma once
 #include "async_task.h"
+#include "endian.h"
 #include <string>
 
 template <typename Buffer, typename AsyncOperation>
 AsyncTask<int> async_buffer_operation(Buffer &b, AsyncOperation &async_operation) {
     int total_consumed = 0;
+
     for (;;) {
         auto [data, size] = b.contiguous();
         if (size == 0) {
@@ -28,7 +30,7 @@ AsyncTask<int> async_buffer_operation(Buffer &b, AsyncOperation &async_operation
     }
 }
 
-template <typename AsyncOperation> AsyncTask<std::string> read_async_c_string(AsyncOperation &read_operation) {
+template <typename AsyncOperation> AsyncTask<std::string> vsread_async_c_string(AsyncOperation &read_operation) {
     std::string str;
     char c;
     for (;;) {
@@ -46,21 +48,18 @@ template <typename AsyncOperation> AsyncTask<std::string> read_async_c_string(As
     }
 }
 
-template <typename AsyncOperation> AsyncTask<std::string> read_async_c_string1(AsyncOperation &read_operation) {
-    std::string str;
-    char c;
-    for (;;) {
-        co_await read_operation(&c, 1);
-
-        if (c == 0) {
-            co_return std::move(str);
-        } else {
-            str += c;
-        }
-    }
-}
-
 template <typename AsyncOperation>
 AsyncTask<> write_async_c_string(const std::string &str, AsyncOperation &write_operation) {
-    co_await write_operation(str.c_str(), str.size() + 1);
+    return write_operation(str.c_str(), str.size() + 1);
+}
+
+template <typename AsyncOperation> AsyncTask<> write_async_size_t(size_t number, AsyncOperation &write_operation) {
+    number = host_to_network64(number);
+    co_await write_operation((char *)&number, sizeof(size_t));
+}
+
+template <typename AsyncOperation> AsyncTask<size_t> read_async_size_t(AsyncOperation &read_operation) {
+    size_t number;
+    co_await read_operation((char *)&number, sizeof(size_t));
+    co_return network_to_host64(number);
 }

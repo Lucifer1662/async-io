@@ -1,33 +1,31 @@
 #pragma once
-#include "raw_socket.h"
+#include "os_socket.h"
 #include "socket_context_handler.h"
+#include "async_operation.h"
 #include <optional>
 #include <memory>
+#include "async_task.h"
 
 class SocketContext;
+class IPAddress;
 
-class Socket : public RawSocket, SocketContextHandler {
+class Socket {
     SocketContext &context;
+    OS::SOCKET fd;
 
   public:
-    Socket(SocketContext &context, RawSocket socket);
+    ReadAsyncOperation read_operation;
+    WriteAsyncOperation write_operation;
 
+    Socket(SocketContext &context, OS::SOCKET fd);
     Socket(const Socket &) = delete;
-    Socket(Socket &&) = delete;
+    Socket(Socket &&) = default;
+
+    Socket &operator=(Socket &&) = default;
+
     static std::optional<Socket> create(SocketContext &context);
 
-    static std::optional<std::unique_ptr<Socket>> create_ptr(SocketContext &context);
+    AsyncTask<> connect(const IPAddress &address);
 
-    void on_event(Flag f, SocketContext &context) override {
-        if (f.isRead()) {
-            read_available();
-        }
-        if (f.isWrite()) {
-            write_available();
-        }
-    }
-
-    ~Socket();
-
-    void on_removed() override { destroy_dependent_coroutines(); }
+    OS::SOCKET FD() { return fd; }
 };

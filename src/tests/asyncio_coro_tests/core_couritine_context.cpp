@@ -8,6 +8,7 @@
 #include <asyncio_coro/socket.h>
 #include <asyncio_coro/listening_socket.h>
 #include <asyncio_coro/linked_socket_context.h>
+#include <asyncio_coro/IpAddress.h>
 
 AsyncTask<> child_task(TimerContext &timerContext) {
     for (int i = 0; i < 2; i++) {
@@ -51,22 +52,16 @@ AsyncTask<> parent_task(TimerContext &timerContext) {
 //     return [fd = socket.FD(), &context]() { context.remove_socket(fd); }
 // }
 
-AsyncTask<> handle_new_connection(std::unique_ptr<Socket> socket) {
-    std::unique_ptr<Socket> s = std::move(socket);
-    co_await write_async_c_string("hello there", s->write_operation);
+AsyncTask<> handle_new_connection(Socket socket) {
+    co_await write_async_c_string("hello there", socket.write_operation);
     std::cout << "Said Hello" << std::endl;
 }
 
 AsyncTask<> accept_connection(ListeningSocket &listening_socket) {
-    std::unique_ptr<Socket> new_connection;
     for (;;) {
-        new_connection = co_await listening_socket.accept();
-        if (new_connection) {
-            std::cout << "New Connection" << std::endl;
-            handle_new_connection(std::move(new_connection));
-        } else {
-            break;
-        }
+        Socket new_connection = co_await listening_socket.accept();
+        std::cout << "New Connection" << std::endl;
+        handle_new_connection(std::move(new_connection));
     };
 }
 
@@ -82,38 +77,15 @@ static AsyncTask<> socket_read_task(SocketContext &socketContext) {
         if (listen_success) {
             accept_connection(socket1);
 
-            // link_socket_to_socket_context(socketContext, socket);
-            // link_socket_to_socket_context(socketContext, socket1);
-
             co_await socket.connect(IPAddress::loopback(1235));
 
             std::cout << "Connected" << std::endl;
 
-            std::string str = co_await read_async_c_string1(socket.read_operation);
+            std::string str = co_await read_async_c_string(socket.read_operation);
 
             std::cout << "Message: " << str << std::endl;
         }
     }
-}
-
-struct Object {
-    int hell0;
-    ~Object() { int w; }
-};
-
-AsyncTask<> wait_for_ever() {
-    struct awaiter {
-
-        bool await_ready() const noexcept { return false; }
-        void await_resume() const noexcept {}
-        void await_suspend(coroutine_handle<> h) noexcept {}
-    };
-
-    Object data[100];
-
-    co_await awaiter();
-
-    std::cout << "here" << std::endl;
 }
 
 TEST(Coroutine_ClientServer, Start) {
@@ -132,6 +104,9 @@ TEST(Coroutine_ClientServer, Start) {
     // char *d;
     // d = (char *)malloc(100);
 
+    context.step();
+    context.step();
+    context.step();
     context.step();
     context.step();
     context.step();

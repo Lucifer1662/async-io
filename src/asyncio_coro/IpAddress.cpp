@@ -1,6 +1,12 @@
 #include "IpAddress.h"
 #include "os_socket.h"
 
+IPAddress::IPAddress(bool is_ipv4, std::vector<unsigned char> address, int port, bool is_loop_back)
+    : is_ipv4(is_ipv4)
+    , address(std::move(address))
+    , port(port)
+    , is_loop_back(is_loop_back) {}
+
 static bool get_num(const char *&s, int &num) {
     auto ss = s;
     auto i = 0;
@@ -139,27 +145,127 @@ std::vector<IPAddress> IPAddress_from_URL(const char *host_name, const char *ser
         //     printf("Other %ld\n", ptr->ai_protocol);
         //     break;
         // }
-
-        return addresses;
     }
 
     freeaddrinfo(result);
+    return addresses;
 }
 
 #else
 #include <stdio.h>
 #include <netdb.h>
 #include <arpa/inet.h>
-std::vector<IPAddress> IPAddress_from_URL(const char *host_name, const char *service_name) {
-    struct hostent *he = gethostbyname("www.stackoverflow.com");
-    std::vector<IPAddress> addresses;
-    for (size_t i = 0; i < he->h_length; i++) {
-        char *ip = inet_ntoa(*(struct in_addr *)he->h_addr_list[i]);
+#include <cstring>
 
-        addresses.push_back(IPAddress(
-            true, {(unsigned char)ip[0], (unsigned char)ip[1], (unsigned char)ip[2], (unsigned char)ip[3]}, 80, false));
+bool isValidIpAddress(const char *ipAddress) {
+    struct sockaddr_in sa;
+    int result = inet_pton(AF_INET, ipAddress, &(sa.sin_addr));
+    return result != 0;
+}
+
+std::vector<IPAddress> IPAddress_from_URL(const char *host_name, const char *service_name) {
+
+    int iRetval;
+
+    struct addrinfo *result = NULL;
+    struct addrinfo *ptr = NULL;
+    struct addrinfo hints;
+
+    struct sockaddr_in *sockaddr_ipv4;
+
+    std::memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_protocol = IPPROTO_TCP;
+
+    auto dwRetval = getaddrinfo(host_name, service_name, &hints, &result);
+    if (dwRetval != 0) {
+        return {};
     }
+
+    std::vector<IPAddress> addresses;
+
+    // Retrieve each address and print out the hex bytes
+    for (ptr = result; ptr != NULL; ptr = ptr->ai_next) {
+
+        switch (ptr->ai_family) {
+        case AF_INET: {
+            sockaddr_ipv4 = (sockaddr_in *)ptr->ai_addr;
+            auto ip_ptr = (unsigned char *)&sockaddr_ipv4->sin_addr;
+            char str[50];
+            inet_ntop(AF_INET, &(sockaddr_ipv4->sin_addr), (char *)&str, INET_ADDRSTRLEN);
+
+            addresses.push_back(IPAddress(true,
+                                          std::vector<unsigned char>({ip_ptr[0], ip_ptr[1], ip_ptr[2], ip_ptr[3]}),
+                                          ntohs(sockaddr_ipv4->sin_port), false));
+            break;
+        }
+
+        default:
+            break;
+        }
+    }
+
+    freeaddrinfo(result);
+
     return addresses;
 }
+
+// std::vector<IPAddress> IPAddress_from_URL(const char *host_name, const char *service_name) {
+
+//     struct addrinfo hints;
+//     struct addrinfo *result, *rp;
+//     int sfd, s;
+//     size_t len;
+//     ssize_t nread;
+
+//     /* Obtain address(es) matching host/port. */
+
+//     std::memset(&hints, 0, sizeof(hints));
+//     hints.ai_family = AF_UNSPEC;    /* Allow IPv4 or IPv6 */
+//     hints.ai_socktype = SOCK_DGRAM; /* Datagram socket */
+//     hints.ai_flags = 0;
+//     hints.ai_protocol = 0; /* Any protocol */
+
+//     s = getaddrinfo(host_name, service_name, &hints, &result);
+//     if (s != 0) {
+//         return {};
+//     }
+
+//     std::vector<IPAddress> addresses;
+
+//     for (rp = result; rp != NULL; rp = rp->ai_next) {
+//         switch (rp->ai_protocol) {
+
+//         case AF_INET:
+//             break;
+//         }
+
+//         sfd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+//         if (sfd == -1)
+//             continue;
+
+//         if (connect(sfd, rp->ai_addr, rp->ai_addrlen) != -1)
+//             break; /* Success */
+
+//         close(sfd);
+//     }
+
+//     freeaddrinfo(result);
+
+//     std::string str = std::string(service_name) + "://" + host_name;
+//     struct hostent *he = gethostbyname(str.c_str());
+//     if (he == nullptr)
+//         return {};
+//     std::vector<IPAddress> addresses;
+//     for (size_t i = 0; i < he->h_length; i++) {
+//         char *ip = inet_ntoa(*(struct in_addr *)he->h_addr_list[i]);
+
+//         addresses.push_back(IPAddress(
+//             true, {(unsigned char)ip[0], (unsigned char)ip[1], (unsigned char)ip[2], (unsigned char)ip[3]}, 80,
+//             false));
+//     }
+//     return addresses;
+// }
 
 #endif
