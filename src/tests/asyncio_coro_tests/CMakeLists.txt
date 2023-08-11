@@ -2,7 +2,7 @@ project ("asyncio")
 
  
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 
  
 file(GLOB SRC
@@ -17,10 +17,6 @@ enable_testing()
 
 add_executable(asyncio_coro_tests ${SRC})
 
-# target_link_libraries(run_tests bafka)
-
-
-# SET(CMAKE_INSTALL_PREFIX "bafka" FORCE)
 
 if(MSVC)
 set(CUSTOM_LIBS "-lwsock32 -lws2_32")

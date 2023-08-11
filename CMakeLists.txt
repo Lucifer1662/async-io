@@ -8,6 +8,8 @@ project ("asyncio")
 add_definitions( -DNOMINMAX )
 enable_testing()
 
+include_directories("/usr/include/c++/10")
+
 
 
 if(MSVC)
@@ -17,8 +19,7 @@ else()
 
 endif()
 
-set(CMAKE_CXX_FLAGS "-fcoroutines")
-
+add_compile_options("-fcoroutines")
 
 
 
@@ -30,8 +31,12 @@ FetchContent_Declare(
 )
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
-
-
+#
+#FetchContent_Declare(googlebenchmark
+#        GIT_REPOSITORY https://github.com/google/benchmark.git
+#        GIT_TAG main) # need master for benchmark::benchmark
+#
+#FetchContent_MakeAvailable(googlebenchmark)
 
 
 
@@ -44,6 +49,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 include_directories("build/")
 
 add_subdirectory("src")
+#add_subdirectory("benchmarks")
 
 
 

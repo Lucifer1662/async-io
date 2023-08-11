@@ -1,0 +1,193 @@
+#include "async_task.h"
+#include <unordered_map>
+#include <deque>
+#include <iostream>
+
+struct Awaitable {
+    coroutine_handle<> handle;
+
+    bool await_ready() const noexcept { return false; }
+    void await_resume() const noexcept {}
+    void await_suspend(coroutine_handle<> h) noexcept { handle = h; }
+
+    void resume() { handle.resume(); }
+};
+
+struct IConnectionHandler {
+    virtual void OnMessage(char *data) = 0;
+    virtual ~IConnectionHandler() = default;
+};
+
+struct Event {
+    Awaitable *mAwaitable;
+    bool mIsSet = false;
+
+    AsyncTask<void> wait(bool reset = false) {
+        mAwaitable = Awaitable();
+        co_await *mAwaitable;
+        mIsSet = !reset;
+    }
+    bool fire() {
+        mIsSet = true;
+        if (mAwaitable) {
+            mAwaitable->resume();
+            mAwaitable = nullptr;
+            return true;
+        }
+        return false;
+    }
+};
+
+template <typename Key, typename Result> struct AsyncEvents {
+    struct Task {
+        Event *mEvent;
+        Result *mResult;
+    };
+
+    std::unordered_map<Key, Task> mTasks;
+    AsyncTask<Result> Register(const Key &key) {
+        auto awaitable = Awaitable();
+
+        Result result;
+        mTasks[key] = {&awaitable, &result};
+
+        co_await awaitable;
+
+        mTasks.erase(key);
+
+        if (awaitable.failed) {
+            throw std::exception();
+        }
+        co_return result;
+    }
+
+    bool OnEvent(const Key &key, const Result &result) {
+        auto it = mTasks.find(key);
+        if (it != mTasks.end()) {
+            *(it->second.mResult) = result;
+            it->second.mEvent->fire();
+            return true;
+        }
+        return false;
+    }
+};
+
+// template <typename Key, typename Result> struct AsyncEvents {
+//     struct Task {
+//         Awaitable *mAwaitable;
+//         Result *mResult;
+//     };
+
+//     std::unordered_map<Key, Task> mTasks;
+//     AsyncTask<Result> Register(const Key &key) {
+//         auto awaitable = Awaitable();
+
+//         Result result;
+//         mTasks[key] = {&awaitable, &result};
+
+//         co_await awaitable;
+
+//         mTasks.erase(key);
+
+//         if (awaitable.failed) {
+//             throw std::exception();
+//         }
+//         co_return result;
+//     }
+
+//     bool OnEvent(const Key &key, const Result &result) {
+//         auto it = mTasks.find(key);
+//         if (it != mTasks.end()) {
+//             *(it->second.mResult) = result;
+//             it->second.mAwaitable->resume();
+//             return true;
+//         }
+//         return false;
+//     }
+// };
+
+template <typename Result> struct SyncEvents {
+    struct Task {
+        Awaitable *mAwaitable;
+        Result &mResult;
+    };
+
+    std::deque<Task> mTasks;
+    AsyncTask<Result> Register() {
+        auto awaitable = Awaitable();
+
+        Result result;
+        mTasks.push({&awaitable, result});
+
+        co_await awaitable;
+
+        mTasks.pop();
+
+        if (awaitable.failed) {
+            throw std::exception();
+        }
+        return result;
+    }
+
+    void OnEvent(const Result &result) {
+        if (!mTasks.empty()) {
+            mTasks.front().mResult = result;
+            mTasks.front()->mAwaitable->resume();
+            return true;
+        }
+        return false;
+    }
+};
+
+struct MyConnection : IConnectionHandler {
+
+    AsyncEvents<size_t, char *> mRequests;
+
+    AsyncTask<char *> SendMessage(char *data) {
+        // send a message
+        static size_t id = 0;
+        id++;
+
+        return mRequests.Register(id);
+    }
+
+    void OnMessage(char *data) {
+        // deserialze id
+        size_t id = 1;
+        if (!mRequests.OnEvent(id, data)) {
+            // dropped event :(
+        }
+    }
+};
+
+struct MyConnection1 : IConnectionHandler {
+
+    AsyncEvents<size_t, char *> mRequests;
+
+    AsyncTask<char *> SendMessage(char *data) {
+        // send a message
+        static size_t id = 0;
+        id++;
+
+        return mRequests.Register(id);
+    }
+
+    void OnMessage(char *data) {
+        // deserialze id
+        size_t id = 1;
+        if (!mRequests.OnEvent(id, data)) {
+            // dropped event :(
+        }
+    }
+};
+
+AsyncTask<> requester(MyConnection &connection) {
+    auto reply = co_await connection.SendMessage((char *)"hello world");
+    std::cout << reply << std::endl;
+}
+
+void main() {
+    MyConnection connection;
+    requester(connection);
+    connection.OnMessage((char *)"hi there :)");
+}

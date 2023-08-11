@@ -260,6 +260,7 @@ AsyncTask<> SocketContext::wait_for_read(OS::SOCKET fd) {
     auto awaitable = SocketContext::Awaitable();
 
     subscribe_for_read(fd, &awaitable);
+
     co_await awaitable;
 
     if (awaitable.failed) {

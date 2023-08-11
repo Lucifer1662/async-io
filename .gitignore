@@ -1,2 +1,5 @@
 /build
 /node_server
+.idea
+cmake-build-debug-visual-studio
+cmake-build-debug-remote-host
