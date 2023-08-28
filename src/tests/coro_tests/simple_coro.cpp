@@ -8,6 +8,24 @@ struct TestNum {
     ~TestNum() { numberOfFrees++; }
 };
 
+TEST(CoroutineTests, MoveTaskTest) {
+    bool isDone = false;
+    auto GetNumberReturnRef = []() -> AsyncTask<std::unique_ptr<int>> {
+        auto a = std::make_unique<int>(5);
+        co_return a;
+    };
+
+    auto funcCoro = [&]() -> AsyncTask<> {
+        auto task = GetNumberReturnRef();
+        auto newTask = std::move(task);
+        auto num = *(co_await newTask);
+        isDone = true;
+        EXPECT_EQ(5, num);
+    };
+    auto task = funcCoro();
+    EXPECT_TRUE(isDone);
+}
+
 TEST(CoroutineTests, ReturnImmediatelyReference) {
     bool isDone = false;
     auto GetNumberReturnRef = []() -> AsyncTask<std::unique_ptr<int>> {
@@ -21,7 +39,7 @@ TEST(CoroutineTests, ReturnImmediatelyReference) {
         isDone = true;
         EXPECT_EQ(5, num);
     };
-    funcCoro().RunDetached();
+    auto task = funcCoro();
     EXPECT_TRUE(isDone);
 }
 
@@ -35,7 +53,7 @@ TEST(CoroutineTests, ReturnImmediatelyRValue) {
         isDone = true;
         EXPECT_EQ(5, num);
     };
-    funcCoro().RunDetached();
+    auto task = funcCoro();
     EXPECT_TRUE(isDone);
 }
 
@@ -49,7 +67,7 @@ TEST(CoroutineTests, ReturnImmediatelyCopyValue) {
         isDone = true;
         EXPECT_EQ(5, num);
     };
-    funcCoro().RunDetached();
+    auto task = funcCoro();
     EXPECT_TRUE(isDone);
 }
 
@@ -65,12 +83,11 @@ TEST(CoroutineTests, ReturnImmediatelyCopyValueStartAndThenWait) {
     {
         auto funcCoro = [&]() -> AsyncTask<> {
             auto task = GetNumberReturnRValue();
-            task.RunDetached();
             auto num = (co_await task)->n;
             isDone = true;
             EXPECT_EQ(5, num);
         };
-        funcCoro().RunDetached();
+        auto task = funcCoro();
     }
     EXPECT_TRUE(isDone);
     EXPECT_EQ(hasComputed, 1);
@@ -99,7 +116,6 @@ TEST(CoroutineTests, SuspendedCoroutineIsDestroyedWhenAsyncTaskIsDestroyed) {
         };
         EXPECT_EQ(numberOfFrees, 0);
         auto task = funcCoro();
-        task.RunDetached();
         EXPECT_EQ(numberOfFrees, 0);
     }
     EXPECT_FALSE(isDone);
@@ -122,7 +138,7 @@ TEST(CoroutineTests, LoopReturnValuesImmediately) {
         isDone = true;
         EXPECT_EQ(sum, 500000);
     };
-    funcCoro().RunDetached();
+    auto task = funcCoro();
     EXPECT_TRUE(isDone);
 }
 
@@ -142,21 +158,17 @@ TEST(CoroutineTests, LoopReturnValuesAfterWaiting) {
     auto funcCoro = [&]() -> AsyncTask<> {
         int sum = 0;
         for (size_t i = 0; i < 100000; i++) {
-            auto task = GetNumberReturnRValue();
-            sum += *(co_await task);
+            sum += *(co_await GetNumberReturnRValue());
         }
         isDone = true;
         EXPECT_EQ(sum, 500000);
     };
+
     auto task = funcCoro();
-    task.RunDetached();
     for (size_t i = 0; i < 100000; i++) {
         EXPECT_EQ(isWaiting, i + 1);
         EXPECT_EQ(hasWaited, i);
         event.Fire();
-        if (i != 100000 - 1) {
-            EXPECT_EQ(isWaiting, i + 2);
-        }
         EXPECT_EQ(hasWaited, i + 1);
     }
     EXPECT_TRUE(isDone);
@@ -171,7 +183,7 @@ TEST(CoroutineTests, WhenReadyReturnImmediately) {
         co_await task.WhenReady();
         isDone = true;
     };
-    funcCoro().RunDetached();
+    auto task = funcCoro();
     EXPECT_TRUE(isDone);
 }
 
@@ -193,7 +205,8 @@ TEST(CoroutineTests, WaitForEventThatFiresButTheCoroutineDied) {
         isDone = true;
         EXPECT_EQ(5, num);
     };
-    funcCoro().RunDetached();
+
+    { auto task = funcCoro(); }
     // funcCoro is deleted here
 
     EXPECT_TRUE(isWaiting);
@@ -223,7 +236,6 @@ TEST(CoroutineTests, WaitForEventThatFiresAfterWait) {
     };
     auto task = funcCoro();
 
-    task.RunDetached();
     EXPECT_TRUE(isWaiting);
     EXPECT_FALSE(hasWaited);
     event.Fire();
@@ -248,7 +260,7 @@ TEST(CoroutineTests, WaitForEventThatFireBeforeWait) {
         isDone = true;
         EXPECT_EQ(5, num);
     };
-    funcCoro().RunDetached();
+    auto task = funcCoro();
     EXPECT_TRUE(isWaiting);
     EXPECT_TRUE(isDone);
 }
@@ -270,7 +282,7 @@ TEST(CoroutineTests, WaitForEventThatFireBeforeWaitAndAfter) {
         isDone = true;
         EXPECT_EQ(5, num);
     };
-    funcCoro().RunDetached();
+    { auto task = funcCoro(); }
     EXPECT_EQ(isWaiting, 1);
     event.Fire();
 
@@ -296,7 +308,7 @@ TEST(CoroutineTests, WaitForEventThatNeverFires) {
         isDone = true;
         EXPECT_EQ(5, num);
     };
-    funcCoro().RunDetached();
+    { auto task = funcCoro(); }
     EXPECT_TRUE(isWaiting);
     EXPECT_FALSE(isFinishedWaiting);
     EXPECT_FALSE(isDone);
@@ -321,16 +333,11 @@ TEST(CoroutineTests, WaitForEventButTheEventDies) {
         EXPECT_EQ(5, num);
     };
 
-    {
-        auto task = funcCoro();
-
-        {
-            Event event;
-            eventPtr = &event;
-
-            task.RunDetached();
-        }
-    }
+    auto event = std::make_unique<Event>();
+    eventPtr = event.get();
+    { auto task = funcCoro(); }
+    // delete event
+    event.reset();
 
     EXPECT_TRUE(isWaiting);
     EXPECT_FALSE(isFinishedWaiting);

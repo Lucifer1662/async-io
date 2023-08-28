@@ -19,7 +19,7 @@ else()
 
 endif()
 
-add_compile_options("-fcoroutines")
+add_compile_options("-fcoroutines-ts")
 
 
 

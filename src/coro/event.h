@@ -4,7 +4,7 @@
 class Event {
     coroutine_handle<> mCoroutine = {};
     std::exception_ptr mException = nullptr;
-    bool mSuspendOnWait = true;
+    int mPreFiredCount = 0;
 
   public:
     Event() = default;
@@ -16,17 +16,18 @@ class Event {
             Event &mEvent;
 
             // ready if not suspending on waiting, or there is an exception
-            bool await_ready() const noexcept { return !mEvent.mSuspendOnWait || mEvent.mException; }
+            bool await_ready() const noexcept { return mEvent.mPreFiredCount > 0 || mEvent.mException; }
 
             // capture coroutine handle to resume later
             void await_suspend(coroutine_handle<> coroutine) { mEvent.mCoroutine = coroutine; }
 
             // when resuming
             void await_resume() {
-                mEvent.mSuspendOnWait = true;
                 // check if an exception and throw to caller of co_await Wait()
                 if (mEvent.mException) {
                     std::rethrow_exception(mEvent.mException);
+                } else {
+                    mEvent.mPreFiredCount--;
                 }
             }
 
@@ -64,7 +65,7 @@ class Event {
             return true;
         } else {
             // next co_await Wait(), does not need to suspend
-            mSuspendOnWait = false;
+            mPreFiredCount++;
             return false;
         }
     }

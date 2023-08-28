@@ -5,7 +5,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "(gdb) Launch",
+            "name": "Windows Launch",
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/src/tests/coro_tests/Debug/coro_tests.exe",
@@ -29,6 +29,65 @@
                     "ignoreFailures": true
                 }
             ]
+        },
+        {
+            "name": "(gdb) coro abort Launch",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/src/coro_abort/coro_abort",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/build/src/coro_abort",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Set Disassembly Flavor to Intel",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "(gdb) Launch",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/src/tests/coro_tests/coro_tests",
+            "args": [
+                "--gtest_filter=*Abort*"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/build/src/tests/coro_tests",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Set Disassembly Flavor to Intel",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "type": "cppdbg",
+            "request": "launch",
+            "name": "core dump",
+            "program": "${workspaceFolder}/build/src/tests/coro_tests/coro_tests",
+            "coreDumpPath": "${workspaceFolder}/build/src/tests/coro_tests/core",
+            "cwd": "${workspaceFolder}",
+            "MIMode": "gdb" // or gdb, if you are using gdb
         }
     ]
 }

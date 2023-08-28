@@ -7,23 +7,24 @@
 #include <exception>
 #include <memory>
 #include <variant>
+#include <functional>
 
 struct Empty {};
-struct Void {};
 
-template <typename ReturnValue> struct BasePromise {
-    std::variant<ReturnValue, Empty, std::exception_ptr> mResult = Empty();
+template <typename... ReturnValue> struct BasePromise {
+    std::variant<ReturnValue..., Empty, std::exception_ptr> mResult = Empty();
     bool mStarted = false;
 
     BasePromise() = default;
     BasePromise(const BasePromise &) = delete;
     BasePromise(const BasePromise &&) = delete;
 
-    coroutine_handle<> precursor;
-    suspend_always initial_suspend() { return {}; }
+    coroutine_handle<> mPrecursor;
+    constexpr suspend_never initial_suspend() const noexcept { return {}; }
+
     auto final_suspend() noexcept {
         struct Awaiter {
-            const coroutine_handle<> &precursor;
+            BasePromise &mPromise;
 
             // return false will always suspend the coroutine when finishing
             // this prevents the return value from being destroyed
@@ -31,12 +32,12 @@ template <typename ReturnValue> struct BasePromise {
             constexpr bool await_ready() const noexcept { return false; }
             void await_resume() const noexcept {}
             void await_suspend(coroutine_handle<> h) const noexcept {
-                if (precursor) {
-                    precursor.resume();
+                if (mPromise.mPrecursor) {
+                    mPromise.mPrecursor.resume();
                 }
             }
         };
-        return Awaiter{precursor};
+        return Awaiter{*this};
     }
 
     void unhandled_exception() { mResult = std::current_exception(); }
@@ -62,36 +63,33 @@ template <typename ReturnValue = void> struct Promise : public BasePromise<Retur
 
     ReturnValue &&result() {
         BasePromise<ReturnValue>::result();
-
         return std::move(std::get<ReturnValue>(mResult));
     }
 };
 
-template <> struct Promise<void> : public BasePromise<Void> {
+template <> struct Promise<void> : public BasePromise<> {
     using ReturnValueRef = void;
-
     AsyncTask<void> get_return_object();
-
-    void return_void() noexcept { mResult = Void(); }
+    void return_void() noexcept {}
 };
 
 template <typename PromiseType> struct BaseAwaitable {
     coroutine_handle<PromiseType> mCoroutine;
 
     bool await_suspend(coroutine_handle<> h) const noexcept {
-        mCoroutine.resume();
+        // mCoroutine.resume();
         // since we always suspend coroutines at their end,
         // it is safe to access their memory
         // the memory will be destroy on ~AsyncTask
 
         if (!mCoroutine.done()) {
-            mCoroutine.promise().precursor = h;
+            mCoroutine.promise().mPrecursor = h;
             return true;
         }
         return false;
     }
     bool await_ready() const noexcept { return !mCoroutine || mCoroutine.done(); }
-    PromiseType::ReturnValueRef await_resume() { return std::move(mCoroutine.promise().result()); }
+    typename PromiseType::ReturnValueRef await_resume() { return mCoroutine.promise().result(); }
 };
 
 template <typename PromiseType> struct BaseAsyncTask {
@@ -100,18 +98,26 @@ template <typename PromiseType> struct BaseAsyncTask {
     BaseAsyncTask(coroutine_handle<PromiseType> coroutine)
         : mCoroutine(coroutine){};
     BaseAsyncTask(const BaseAsyncTask &) = delete;
-    BaseAsyncTask(BaseAsyncTask &&newTask) {
-        if (&newTask != this) {
-            newTask.mCoroutine = mCoroutine;
-            mCoroutine = nullptr;
-        }
+    BaseAsyncTask(BaseAsyncTask &&other) {
+        mCoroutine = other.mCoroutine;
+        other.mCoroutine = nullptr;
     };
+
+    BaseAsyncTask<PromiseType> operator=(PromiseType &&other) {
+        if (&other != this) {
+            if (mCoroutine) {
+                mCoroutine.destroy();
+            }
+            mCoroutine = other.mCoroutine;
+            other.mCoroutine = nullptr;
+        }
+    }
 
     using promise_type = PromiseType;
     operator coroutine_handle<PromiseType>() const { return mCoroutine; }
     operator coroutine_handle<>() const { return mCoroutine; }
 
-    void RunDetached() const { mCoroutine.resume(); }
+    void Resume() const { mCoroutine.resume(); }
 
     auto operator co_await() const &noexcept {
         struct awaitable : public BaseAwaitable<PromiseType> {};
@@ -134,4 +140,4 @@ template <typename PromiseType> struct BaseAsyncTask {
 
 template <typename ReturnValue = void> struct [[nodiscard]] AsyncTask : public BaseAsyncTask<Promise<ReturnValue>> {};
 
-template <> struct AsyncTask<void> : public BaseAsyncTask<Promise<void>> {};
+template <> struct [[nodiscard]] AsyncTask<void> : public BaseAsyncTask<Promise<void>> {};
