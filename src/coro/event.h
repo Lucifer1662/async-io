@@ -4,9 +4,11 @@
 class Event {
     coroutine_handle<> mCoroutine = {};
     std::exception_ptr mException = nullptr;
-    int mPreFiredCount = 0;
+    size_t mPreFiredCount = 0;
 
   public:
+    Event(size_t startCount)
+        : mPreFiredCount(startCount) {}
     Event() = default;
     Event(const Event &) = delete;
     Event(Event &&) = delete;
